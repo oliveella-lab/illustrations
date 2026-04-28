@@ -1,15 +1,48 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 
 export default function Home() {
   const [description, setDescription] = useState('')
   const [imageUrl, setImageUrl] = useState<string | null>(null)
   const [enhancedPrompt, setEnhancedPrompt] = useState<string | null>(null)
   const [generationId, setGenerationId] = useState<string | null>(null)
+  const [predictionId, setPredictionId] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
+  const [loadingMsg, setLoadingMsg] = useState('מייצר פרומפט...')
   const [feedbackSent, setFeedbackSent] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
+
+  useEffect(() => {
+    if (!predictionId) return
+    setLoadingMsg('יוצר איור...')
+
+    pollRef.current = setInterval(async () => {
+      try {
+        const res = await fetch(`/api/status/${predictionId}`)
+        const data = await res.json()
+
+        if (data.status === 'succeeded') {
+          clearInterval(pollRef.current!)
+          setPredictionId(null)
+          setImageUrl(data.imageUrl)
+          setLoading(false)
+        } else if (data.status === 'failed') {
+          clearInterval(pollRef.current!)
+          setPredictionId(null)
+          setError('היצירה נכשלה, נסי שוב')
+          setLoading(false)
+        }
+      } catch {
+        clearInterval(pollRef.current!)
+        setError('שגיאה בחיבור לשרת')
+        setLoading(false)
+      }
+    }, 3000)
+
+    return () => clearInterval(pollRef.current!)
+  }, [predictionId])
 
   async function generate() {
     if (!description.trim()) return
@@ -17,8 +50,10 @@ export default function Home() {
     setImageUrl(null)
     setEnhancedPrompt(null)
     setGenerationId(null)
+    setPredictionId(null)
     setFeedbackSent(false)
     setError(null)
+    setLoadingMsg('מייצר פרומפט...')
 
     try {
       const res = await fetch('/api/generate', {
@@ -28,12 +63,11 @@ export default function Home() {
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'שגיאה ביצירת האיור')
-      setImageUrl(data.imageUrl)
       setEnhancedPrompt(data.enhancedPrompt)
       setGenerationId(data.id)
+      setPredictionId(data.predictionId)
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'שגיאה לא צפויה')
-    } finally {
       setLoading(false)
     }
   }
@@ -59,9 +93,10 @@ export default function Home() {
             type="text"
             value={description}
             onChange={e => setDescription(e.target.value)}
-            onKeyDown={e => e.key === 'Enter' && generate()}
+            onKeyDown={e => e.key === 'Enter' && !loading && generate()}
             placeholder="לדוגמה: בקבוק בירה, מעטפה, עץ..."
             className="flex-1 border border-gray-300 rounded-xl px-4 py-3 text-base outline-none focus:border-gray-600 bg-white"
+            disabled={loading}
           />
           <button
             onClick={generate}
@@ -75,7 +110,7 @@ export default function Home() {
         {loading && (
           <div className="text-center py-16">
             <div className="inline-block w-8 h-8 border-2 border-gray-900 border-t-transparent rounded-full animate-spin mb-4" />
-            <p className="text-gray-500 text-sm">יוצר איור...</p>
+            <p className="text-gray-500 text-sm">{loadingMsg}</p>
           </div>
         )}
 

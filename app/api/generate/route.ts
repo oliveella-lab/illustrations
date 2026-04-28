@@ -9,7 +9,7 @@ const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! })
 const STYLE_CONTEXT = `You are an expert at writing prompts for a fine-tuned illustration model.
 The model was trained on a specific illustration style with these characteristics:
 - Bold black outlines on all shapes
-- Pastel color palette: mint green (#C8EDE3), baby pink (#F7C5CC), sky blue (#B5D9F0), coral pink (#F06090)
+- Pastel color palette: mint green, baby pink, sky blue, coral pink
 - Hard solid drop shadow (not blurred) offset bottom-right in near-black
 - Subtle diagonal highlight/sheen on 3D surfaces
 - Clean geometric shapes with rounded corners
@@ -26,6 +26,7 @@ export async function POST(req: NextRequest) {
     const { description } = await req.json()
     if (!description) return NextResponse.json({ error: 'תיאור חסר' }, { status: 400 })
 
+    // Generate enhanced prompt with Claude
     const message = await anthropic.messages.create({
       model: 'claude-sonnet-4-6',
       max_tokens: 150,
@@ -38,22 +39,33 @@ export async function POST(req: NextRequest) {
 
     const enhancedPrompt = (message.content[0] as { type: string; text: string }).text.trim()
 
-    const output = await replicate.run(
-      process.env.REPLICATE_MODEL as `${string}/${string}:${string}`,
-      { input: { prompt: enhancedPrompt, num_outputs: 1 } }
-    ) as string[]
+    // Start async prediction (returns immediately)
+    const [modelId, versionId] = process.env.REPLICATE_MODEL!.split(':')
+    const prediction = await replicate.predictions.create({
+      version: versionId,
+      input: { prompt: enhancedPrompt },
+    })
 
-    const imageUrl = Array.isArray(output) ? output[0] : output
-
+    // Save to Supabase with pending status
     const { data, error } = await supabase
       .from('generations')
-      .insert({ description, enhanced_prompt: enhancedPrompt, image_url: imageUrl })
+      .insert({
+        description,
+        enhanced_prompt: enhancedPrompt,
+        image_url: '',
+        prediction_id: prediction.id,
+        status: 'pending',
+      })
       .select('id')
       .single()
 
     if (error) console.error('Supabase insert error:', error)
 
-    return NextResponse.json({ imageUrl, enhancedPrompt, id: data?.id })
+    return NextResponse.json({
+      predictionId: prediction.id,
+      enhancedPrompt,
+      id: data?.id,
+    })
   } catch (e) {
     console.error(e)
     return NextResponse.json({ error: 'שגיאה ביצירת האיור' }, { status: 500 })
