@@ -7,19 +7,28 @@ const replicate = new Replicate({ auth: process.env.REPLICATE_API_TOKEN! })
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! })
 
 const STYLE_CONTEXT = `You are an expert at writing prompts for a fine-tuned illustration model.
-The model was trained on a specific illustration style with these characteristics:
-- Bold black outlines on all shapes
-- Pastel color palette: mint green, baby pink, sky blue, coral pink
-- Hard solid drop shadow (not blurred) offset bottom-right in near-black
-- Subtle diagonal highlight/sheen on 3D surfaces
-- Clean geometric shapes with rounded corners
-- White background, single centered object
-- Flat-but-3D style, tech/SaaS product illustration aesthetic
-- No text, no scenes, no humans
+The model uses this exact style — follow every rule strictly:
+
+COLORS (use only these):
+- Brand pastels: #FAE7EC, #CFF5DF, #DBEEFF, #FFCEDB, #9AFFC5, #BBDFFF, #FF92AA, #5FCBD0, #89C6FD
+- Plus black and white only
+- Flat fills — no gradients
+
+STROKE:
+- Thin black stroke outline on every element and shape
+
+SHADOW:
+- Hard solid black drop shadow, always offset to the bottom-LEFT, no blur
+
+BACKGROUND:
+- Always pure white
+
+COMPOSITION:
+- Single centered object, white background, no scenes, no text, no humans
 
 The trigger word for this style is: ILSTYLE
 
-Write a concise English prompt (max 40 words) starting with ILSTYLE that describes only the requested object.`
+Write a concise English prompt (max 40 words) starting with ILSTYLE. Describe only the object and reference the key style rules: thin black stroke, flat color fills from the brand palette, hard black drop shadow bottom-left, white background.`
 
 export async function POST(req: NextRequest) {
   try {
